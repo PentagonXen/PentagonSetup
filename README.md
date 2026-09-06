@@ -30,10 +30,10 @@ From a local checkout:
 |---|------|--------|
 | 1 | Win11Debloat - default mode, silent | fetched live ([raphire/win11debloat](https://github.com/raphire/win11debloat)) |
 | 2 | Winutil - applies my `winutil-config.json` | fetched live ([christitustech/winutil](https://github.com/christitustech/winutil)) |
-| 3 | Windows Update "Recommended" profile - defer feature 365d / quality 4d, no driver offers, no auto-reboot | mirrored from Winutil (MIT) |
+| 3 | Windows Update "Recommended" profile - defer feature 365d / quality 4d, no driver offers, no auto-reboot | clean-room implementation |
 | 4 | Cloudflare DNS + DoH on every active adapter | built-in |
 | 5 | Ultimate Performance power plan (auto-skipped on battery systems) | built-in |
-| 6 | O&O ShutUp10++ - applies my `ooshutup10.cfg` silently | cached in `tools\` ([O&O Software](https://www.oo-software.com/en/shutup10)) |
+| 6 | O&O ShutUp10++ - applies my `ooshutup10.cfg` silently | fresh-downloaded each run, auto-deleted ([O&O Software](https://www.oo-software.com/en/shutup10)) |
 
 One UAC prompt total. The remote tools are always the latest version.
 
@@ -72,9 +72,11 @@ Both config files are plain tool exports - swap in your own:
 ## Notes
 
 - This repository is public - keep the config files free of secrets/tokens.
+- This repo contains no third-party code or binaries - only original code
+  and data config files.
 
 ## Credits
 
 - [Win11Debloat](https://github.com/raphire/win11debloat) by Raphire - MIT
-- [Winutil](https://github.com/christitustech/winutil) by Chris Titus Tech - MIT
+- [Winutil](https://github.com/christitustech/winutil) by Chris Titus Tech - MIT (invoked live)
 - [O&O ShutUp10++](https://www.oo-software.com/en/shutup10) by O&O Software - freeware

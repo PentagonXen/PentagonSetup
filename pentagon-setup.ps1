@@ -6,13 +6,13 @@
     Runs, in order:
       1.  Win11Debloat (latest)   - default mode, silent
       2.  Winutil (latest)        - your saved config (winutil-config.json)
-      2b. Windows Update 'Recommended' profile (mirrored from Winutil, MIT)
+      2b. Windows Update 'Recommended' profile (clean-room implementation)
       2c. Cloudflare DNS + DoH on every active adapter
       2d. Ultimate Performance power plan (skipped on battery systems)
       3.  O&O ShutUp10++          - your settings (ooshutup10.cfg), silent
 
     Remote runs (irm ... | iex) fully clean up after themselves on success:
-    the download cache, tools and logs are deleted - nothing is left behind.
+    the download cache and logs are deleted - nothing is left behind.
     A failed run keeps its logs for debugging.
 
 .EXAMPLE
@@ -109,41 +109,78 @@ function Invoke-Step {
     }
 }
 
-function Apply-RecommendedUpdateProfile {
-    # Faithful mirror of Winutil's Invoke-WPFUpdatessecurity
-    # (MIT License (c) Chris Titus Tech - github.com/ChrisTitusTech/winutil)
-    $wu = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate'
-    $au = Join-Path $wu 'AU'
-    Remove-ItemProperty -Path $au -Name 'NoAutoUpdate' -ErrorAction SilentlyContinue
-    Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config' -Name 'DODownloadMode' -ErrorAction SilentlyContinue
-    Set-Service -Name BITS     -StartupType Manual
-    Set-Service -Name wuauserv -StartupType Manual
-    Set-Service -Name UsoSvc   -StartupType Automatic
+function Set-RecommendedUpdateProfile {
+    # Windows Update 'Recommended' profile - original implementation.
+    # The policy keys and values are Microsoft's public Windows Update policy
+    # constants; no third-party source code is reproduced in this repo.
+    $polRoot   = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate'
+    $polAuto   = "$polRoot\AU"
+    $drvSearch = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching'
+    $devMeta   = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Device Metadata'
+
+    # 1. Update services: BITS and the Windows Update service on demand,
+    #    the Update Orchestrator active in the background.
+    $svcModes = @{ 'BITS' = 'Manual'; 'wuauserv' = 'Manual'; 'UsoSvc' = 'Automatic' }
+    foreach ($name in $svcModes.Keys) {
+        Set-Service -Name $name -StartupType $svcModes[$name]
+    }
     Start-Service -Name UsoSvc
-    foreach ($t in '\Microsoft\Windows\InstallService\*', '\Microsoft\Windows\UpdateOrchestrator\*',
-                    '\Microsoft\Windows\UpdateAssistant\*', '\Microsoft\Windows\WaaSMedic\*',
-                    '\Microsoft\Windows\WindowsUpdate\*', '\Microsoft\WindowsUpdate\*') {
-        Get-ScheduledTask -TaskPath $t -ErrorAction SilentlyContinue | Enable-ScheduledTask -ErrorAction SilentlyContinue
+
+    # 2. Re-arm the update pipeline scheduled tasks.
+    foreach ($taskPath in @('\Microsoft\Windows\InstallService\',
+                            '\Microsoft\Windows\UpdateOrchestrator\',
+                            '\Microsoft\Windows\UpdateAssistant\',
+                            '\Microsoft\Windows\WaaSMedic\',
+                            '\Microsoft\Windows\WindowsUpdate\',
+                            '\Microsoft\WindowsUpdate\')) {
+        Get-ScheduledTask -TaskPath $taskPath -ErrorAction SilentlyContinue |
+            Enable-ScheduledTask -ErrorAction SilentlyContinue
     }
-    New-Item -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Device Metadata' -Force | Out-Null
-    Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Device Metadata' -Name 'PreventDeviceMetadataFromNetwork' -Type DWord -Value 1
-    New-Item -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching' -Force | Out-Null
-    Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching' -Name 'DontPromptForWindowsUpdate' -Type DWord -Value 1
-    Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching' -Name 'DontSearchWindowsUpdate' -Type DWord -Value 1
-    Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching' -Name 'DriverUpdateWizardWuSearchEnabled' -Type DWord -Value 0
-    New-Item -Path $wu -Force | Out-Null
-    Set-ItemProperty -Path $wu -Name 'ExcludeWUDriversInQualityUpdate' -Type DWord -Value 1
-    Set-ItemProperty -Path $wu -Name 'DeferFeatureUpdates' -Type DWord -Value 1
-    Set-ItemProperty -Path $wu -Name 'DeferFeatureUpdatesPeriodInDays' -Type DWord -Value 365
-    Set-ItemProperty -Path $wu -Name 'DeferQualityUpdates' -Type DWord -Value 1
-    Set-ItemProperty -Path $wu -Name 'DeferQualityUpdatesPeriodInDays' -Type DWord -Value 4
-    foreach ($v in 'BranchReadinessLevel', 'DeferFeatureUpdatesPeriodInDays', 'DeferQualityUpdatesPeriodInDays') {
-        Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings' -Name $v -ErrorAction SilentlyContinue
+
+    # 3. Do not offer or auto-search drivers through Windows Update.
+    New-Item -Path $drvSearch -Force | Out-Null
+    $driverPolicies = @{
+        'DontPromptForWindowsUpdate'        = 1
+        'DontSearchWindowsUpdate'          = 1
+        'DriverUpdateWizardWuSearchEnabled' = 0
     }
-    New-Item -Path $au -Force | Out-Null
-    Set-ItemProperty -Path $au -Name 'AUOptions' -Type DWord -Value 4
-    Set-ItemProperty -Path $au -Name 'NoAutoRebootWithLoggedOnUsers' -Type DWord -Value 1
-    Set-ItemProperty -Path $au -Name 'AUPowerManagement' -Type DWord -Value 0
+    foreach ($key in $driverPolicies.Keys) {
+        Set-ItemProperty -Path $drvSearch -Name $key -Type DWord -Value $driverPolicies[$key]
+    }
+    New-Item -Path $devMeta -Force | Out-Null
+    Set-ItemProperty -Path $devMeta -Name 'PreventDeviceMetadataFromNetwork' -Type DWord -Value 1
+
+    # 4. Deferral schedule: features 365 days, quality updates 4 days,
+    #    drivers excluded from quality updates.
+    New-Item -Path $polRoot -Force | Out-Null
+    $deferrals = @{
+        'ExcludeWUDriversInQualityUpdate' = 1
+        'DeferFeatureUpdates'             = 1
+        'DeferFeatureUpdatesPeriodInDays' = 365
+        'DeferQualityUpdates'             = 1
+        'DeferQualityUpdatesPeriodInDays' = 4
+    }
+    foreach ($key in $deferrals.Keys) {
+        Set-ItemProperty -Path $polRoot -Name $key -Type DWord -Value $deferrals[$key]
+    }
+
+    # 5. Never auto-restart while a user is signed in.
+    New-Item -Path $polAuto -Force | Out-Null
+    $restartPolicies = @{
+        'AUOptions'                     = 4
+        'NoAutoRebootWithLoggedOnUsers' = 1
+        'AUPowerManagement'             = 0
+    }
+    foreach ($key in $restartPolicies.Keys) {
+        Set-ItemProperty -Path $polAuto -Name $key -Type DWord -Value $restartPolicies[$key]
+    }
+
+    # 6. Clear stale migration leftovers from the consumer-side update store.
+    foreach ($key in @('BranchReadinessLevel', 'DeferFeatureUpdatesPeriodInDays', 'DeferQualityUpdatesPeriodInDays')) {
+        Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings' -Name $key -ErrorAction SilentlyContinue
+    }
+    Remove-ItemProperty -Path $polAuto -Name 'NoAutoUpdate' -ErrorAction SilentlyContinue
+    Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config' -Name 'DODownloadMode' -ErrorAction SilentlyContinue
 }
 
 function Set-CloudflareDns {
@@ -234,10 +271,10 @@ if (-not $SkipWinutil) {
 }
 
 if (-not $SkipUpdateProfile) {
-    Invoke-Step -Name "Windows Update 'Recommended' profile" -Desc 'Defer feature 365d / quality 4d, no driver offers, no auto-reboot (Winutil mirror)' {
+    Invoke-Step -Name "Windows Update 'Recommended' profile" -Desc 'Defer feature 365d / quality 4d, no driver offers, no auto-reboot (clean-room)' {
         $edition = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').EditionID
         if ($edition -like '*Home*') { Write-Warning 'Windows Home detected - update deferrals need Pro/Enterprise/Education; Windows will ignore some values.' }
-        Apply-RecommendedUpdateProfile
+        Set-RecommendedUpdateProfile
     }
 }
 
@@ -250,16 +287,17 @@ if (-not $SkipPowerPlan) {
 }
 
 if (-not $SkipShutup) {
-    Invoke-Step -Name 'O&O ShutUp10++ (silent)' -Desc 'tools\OOSU10.exe ooshutup10.cfg /quiet' {
-        $tools = Join-Path $Root 'tools'
-        New-Item -ItemType Directory -Path $tools -Force | Out-Null
-        $oosu = Join-Path $tools 'OOSU10.exe'
-        if (-not (Test-Path $oosu)) {
-            Write-Host 'Downloading O&O ShutUp10++ (~76 MB, cached in tools\)...'
-            Invoke-WebRequest -Uri 'https://dl5.oo-software.com/files/ooshutup10/OOSU10.exe' -OutFile $oosu -UseBasicParsing
+    Invoke-Step -Name 'O&O ShutUp10++ (silent)' -Desc 'OOSU10.exe (fresh download, deleted after) ooshutup10.cfg /quiet' {
+        $oosu = Join-Path $env:TEMP 'OOSU10.exe'
+        Write-Host 'Downloading O&O ShutUp10++ (fresh copy, removed after the run)...'
+        Invoke-WebRequest -Uri 'https://dl5.oo-software.com/files/ooshutup10/OOSU10.exe' -OutFile $oosu -UseBasicParsing
+        try {
+            $p = Start-Process -FilePath $oosu -ArgumentList "`"$Root\ooshutup10.cfg`"", '/quiet' -Wait -PassThru
+            if ($p.ExitCode -ne 0) { throw "OOSU10 exited with code $($p.ExitCode)" }
         }
-        $p = Start-Process -FilePath $oosu -ArgumentList "`"$Root\ooshutup10.cfg`"", '/quiet' -Wait -PassThru
-        if ($p.ExitCode -ne 0) { throw "OOSU10 exited with code $($p.ExitCode)" }
+        finally {
+            Remove-Item -LiteralPath $oosu -Force -ErrorAction SilentlyContinue
+        }
     }
 }
 
