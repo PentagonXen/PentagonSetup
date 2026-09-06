@@ -1,37 +1,37 @@
 # PentagonSetup
 
-One-command Windows setup: debloat, your tweaks, privacy hardening - then it
-cleans up after itself, leaving nothing behind.
+One-command Windows setup: runs a debloat pass, applies a saved Winutil
+configuration, hardens privacy with O&O ShutUp10++ - then cleans up after
+itself, leaving nothing behind.
 
-## The command (PowerShell)
+> Modifies system settings: removes apps, changes services, registry, DNS
+> and the active power plan. Review the scripts, and prefer a fresh restore
+> point. Use at your own risk.
+
+## Usage
 
     irm https://raw.githubusercontent.com/PentagonXen/PentagonSetup/main/pentagon-setup.ps1 | iex
-
-Short link (recommended - survives GitHub renames):
-
-    irm tinyurl.com/pentagonsetup | iex
 
 With options:
 
     & ([scriptblock]::Create((irm https://raw.githubusercontent.com/PentagonXen/PentagonSetup/main/pentagon-setup.ps1))) -DryRun
 
-Locally (this folder):
+From a local checkout:
 
-    .\pentagon-setup.ps1          # or double-click pentagon-setup.bat
+    .\pentagon-setup.ps1        # or double-click pentagon-setup.bat
 
-## What it runs
+## What it does
 
 | # | Step | Source |
 |---|------|--------|
-| 1 | Win11Debloat - default mode, silent | fetched live (raphire/win11debloat) |
-| 2 | Winutil - your saved config | fetched live (christitustech/winutil) |
-| 2b | Windows Update "Recommended" profile | mirrored from Winutil (MIT) |
-| 2c | Cloudflare DNS + DoH on all active adapters | native |
-| 2d | Ultimate Performance power plan (skipped on battery) | native |
-| 3 | O&O ShutUp10++ - your settings, silent | cached in tools\ (O&O Software) |
+| 1 | Win11Debloat - default mode, silent | fetched live ([raphire/win11debloat](https://github.com/raphire/win11debloat)) |
+| 2 | Winutil - applies `winutil-config.json` | fetched live ([christitustech/winutil](https://github.com/christitustech/winutil)) |
+| 3 | Windows Update "Recommended" profile - defer feature 365d / quality 4d, no driver offers, no auto-reboot | mirrored from Winutil (MIT) |
+| 4 | Cloudflare DNS + DoH on every active adapter | built-in |
+| 5 | Ultimate Performance power plan (auto-skipped on battery systems) | built-in |
+| 6 | O&O ShutUp10++ - applies `ooshutup10.cfg` silently | cached in `tools\` ([O&O Software](https://www.oo-software.com/en/shutup10)) |
 
-One UAC prompt. Remote runs delete their cache, tools and logs on success -
-a failed run keeps its logs for debugging (the path is printed).
+One UAC prompt total. The remote tools are always the latest version.
 
 ## Switches
 
@@ -39,25 +39,35 @@ a failed run keeps its logs for debugging (the path is printed).
 `-SkipPowerPlan` `-SkipShutup` `-KeepCache` `-Force`
 
 - `-DryRun` prints exactly what would run and changes nothing.
-- `-KeepCache` keeps the remote-run cache even on success.
+- `-KeepCache` keeps the download cache even on success.
 - `-Force` applies the power plan even on battery systems.
 
-## Updating your settings
+## Configuration
 
-- `winutil-config.json` - exported from the Winutil GUI (Config tab, Export).
-  Re-export anytime and replace this file.
-- `ooshutup10.cfg` - exported from O&O ShutUp10 (File, Save settings as).
-  Re-export anytime and replace this file.
+Both config files are plain tool exports - swap in your own:
 
-## If you rename your GitHub account
+- `winutil-config.json` - exported from Winutil (Config tab, Export)
+- `ooshutup10.cfg` - exported from O&O ShutUp10++ (File, Save settings as)
 
-1. Edit the TinyURL destination (tinyurl.com dashboard) to the new raw URL.
-2. Update the URLs in this README and in your `$PROFILE` alias.
-3. `git remote set-url origin https://github.com/<new-name>/PentagonSetup.git`
+## Cleanup behavior
+
+- One-liner runs download to a local cache and **delete it on success** -
+  nothing is left behind.
+- A failed run keeps its logs for debugging (the path is printed).
+- Local checkouts are never touched; logs live in `logs\`.
+
+## Requirements
+
+- Windows 10 or 11, PowerShell 5.1 (built in)
+- Internet access (the remote tools are fetched at run time)
+- Administrator rights (the script elevates itself once)
 
 ## Notes
 
-- This repo is PUBLIC by design (the one-liner needs anonymous access). The
-  config files contain only tweak preferences - NEVER put tokens/secrets in.
-- Credits: Win11Debloat (Raphire, MIT), Winutil (Chris Titus Tech, MIT),
-  O&O ShutUp10++ (O&O Software, freeware).
+- This repository is public - keep the config files free of secrets/tokens.
+
+## Credits
+
+- [Win11Debloat](https://github.com/raphire/win11debloat) by Raphire - MIT
+- [Winutil](https://github.com/christitustech/winutil) by Chris Titus Tech - MIT
+- [O&O ShutUp10++](https://www.oo-software.com/en/shutup10) by O&O Software - freeware
