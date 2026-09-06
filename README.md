@@ -1,20 +1,24 @@
 # PentagonSetup
 
-One-command Windows setup: runs a debloat pass, applies a saved Winutil
-configuration, hardens privacy with O&O ShutUp10++ - then cleans up after
-itself, leaving nothing behind.
+One-command Windows setup. I run a debloat pass, apply my Winutil config,
+harden privacy with O&O ShutUp10++, then clean up after myself. Nothing left
+behind.
 
 > Modifies system settings: removes apps, changes services, registry, DNS
 > and the active power plan. Review the scripts, and prefer a fresh restore
 > point. Use at your own risk.
 
-## Usage
+## Quick run
+
+    irm tinyurl.com/pentagonsetup | iex
+
+Or the full URL:
 
     irm https://raw.githubusercontent.com/PentagonXen/PentagonSetup/main/pentagon-setup.ps1 | iex
 
 With options:
 
-    & ([scriptblock]::Create((irm https://raw.githubusercontent.com/PentagonXen/PentagonSetup/main/pentagon-setup.ps1))) -DryRun
+    & ([scriptblock]::Create((irm tinyurl.com/pentagonsetup))) -DryRun
 
 From a local checkout:
 
@@ -25,13 +29,16 @@ From a local checkout:
 | # | Step | Source |
 |---|------|--------|
 | 1 | Win11Debloat - default mode, silent | fetched live ([raphire/win11debloat](https://github.com/raphire/win11debloat)) |
-| 2 | Winutil - applies `winutil-config.json` | fetched live ([christitustech/winutil](https://github.com/christitustech/winutil)) |
+| 2 | Winutil - applies my `winutil-config.json` | fetched live ([christitustech/winutil](https://github.com/christitustech/winutil)) |
 | 3 | Windows Update "Recommended" profile - defer feature 365d / quality 4d, no driver offers, no auto-reboot | mirrored from Winutil (MIT) |
 | 4 | Cloudflare DNS + DoH on every active adapter | built-in |
 | 5 | Ultimate Performance power plan (auto-skipped on battery systems) | built-in |
-| 6 | O&O ShutUp10++ - applies `ooshutup10.cfg` silently | cached in `tools\` ([O&O Software](https://www.oo-software.com/en/shutup10)) |
+| 6 | O&O ShutUp10++ - applies my `ooshutup10.cfg` silently | cached in `tools\` ([O&O Software](https://www.oo-software.com/en/shutup10)) |
 
 One UAC prompt total. The remote tools are always the latest version.
+
+For CTT and O&O ShutUp I used my own preferences FYI - swap them out if you
+want (see Configuration).
 
 ## Switches
 
@@ -51,7 +58,7 @@ Both config files are plain tool exports - swap in your own:
 
 ## Cleanup behavior
 
-- One-liner runs download to a local cache and **delete it on success** -
+- One-liner runs download to a local cache and **deletes it on success** -
   nothing is left behind.
 - A failed run keeps its logs for debugging (the path is printed).
 - Local checkouts are never touched; logs live in `logs\`.
