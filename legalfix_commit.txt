@@ -1,5 +1,0 @@
-fix: zero third-party code/binaries in repo
-
-- Replace embedded Winutil update profile with clean-room Set-RecommendedUpdateProfile
-- O&O ShutUp10++ now downloaded fresh to %TEMP% and deleted after run (no tools\ cache)
-- README/.gitignore updated accordingly
