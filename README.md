@@ -18,15 +18,15 @@ reboot.
 
 ## Quick run
 
-    irm tinyurl.com/pentagonsetup | iex
-
-Or the full URL:
-
     irm https://raw.githubusercontent.com/PentagonXen/PentagonSetup/main/pentagon-setup.ps1 | iex
+
+Or the short link:
+
+    irm tinyurl.com/pentagonsetup | iex
 
 With options:
 
-    & ([scriptblock]::Create((irm tinyurl.com/pentagonsetup))) -DryRun
+    & ([scriptblock]::Create((irm https://raw.githubusercontent.com/PentagonXen/PentagonSetup/main/pentagon-setup.ps1))) -DryRun
 
 From a local checkout:
 
