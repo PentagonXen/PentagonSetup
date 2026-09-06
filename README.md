@@ -11,6 +11,11 @@ fresh Windows 10 or 11 install, before you pile on your own apps and
 settings. Works on an existing setup too, but a clean start is the ideal
 time.
 
+Before you run: don't touch your mouse or keyboard while the script is running.
+A restart is highly recommended once the script finishes; several changes
+(debloat, services, update policy, power plan) only fully take effect after a
+reboot.
+
 ## Quick run
 
     irm tinyurl.com/pentagonsetup | iex
