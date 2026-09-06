@@ -8,7 +8,7 @@
       2.  Winutil (latest)        - your saved config (winutil-config.json)
       2b. Windows Update 'Recommended' profile (clean-room implementation)
       2c. Cloudflare DNS + DoH on every active adapter
-      2d. Ultimate Performance power plan (skipped on battery systems)
+      2d. Ultimate Performance power plan
       3.  O&O ShutUp10++          - your settings (ooshutup10.cfg), silent
 
     Remote runs (irm ... | iex) fully clean up after themselves on success:
@@ -29,8 +29,7 @@ param(
     [switch]$SkipDns,
     [switch]$SkipPowerPlan,
     [switch]$SkipShutup,
-    [switch]$KeepCache,
-    [switch]$Force
+    [switch]$KeepCache
 )
 
 $ErrorActionPreference = 'Stop'
@@ -220,13 +219,6 @@ function Set-CloudflareDns {
 }
 
 function Enable-UltimatePerformancePlan {
-    if (Get-CimInstance -ClassName Win32_Battery -ErrorAction SilentlyContinue) {
-        if (-not $Force) {
-            Write-Warning 'Battery system detected - skipping Ultimate Performance (CTT: NOT FOR LAPTOPS). Re-run with -Force to apply anyway.'
-            $script:Results['Ultimate Performance power plan'] = 'SKIPPED (battery system)'
-            return
-        }
-    }
     $guidRe   = '[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}'
     $existing = powercfg /list | Select-String 'Ultimate Performance'
     if ($existing) {
@@ -283,7 +275,7 @@ if (-not $SkipDns) {
 }
 
 if (-not $SkipPowerPlan) {
-    Invoke-Step -Name 'Ultimate Performance power plan' -Desc 'powercfg: duplicate+activate Ultimate Performance (idempotent; skipped on battery)' { Enable-UltimatePerformancePlan }
+    Invoke-Step -Name 'Ultimate Performance power plan' -Desc 'powercfg: duplicate+activate Ultimate Performance (idempotent)' { Enable-UltimatePerformancePlan }
 }
 
 if (-not $SkipShutup) {

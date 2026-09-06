@@ -1,0 +1,3 @@
+feat: always apply Ultimate Performance (drop laptop skip + -Force)
+
+Ultimate Performance is now applied on every system - laptops included. The battery check and -Force switch are gone; -SkipPowerPlan remains the way to opt out.
