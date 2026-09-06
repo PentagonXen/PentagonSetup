@@ -6,6 +6,11 @@ Tool for debloating and setting up Windows.
 > and the active power plan. Review the scripts, and prefer a fresh restore
 > point. Use at your own risk.
 
+I run these scripts on every Windows system I touch. Best run right after a
+fresh Windows 10 or 11 install, before you pile on your own apps and
+settings. Works on an existing setup too, but a clean start is the ideal
+time.
+
 ## Quick run
 
     irm tinyurl.com/pentagonsetup | iex
