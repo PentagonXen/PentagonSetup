@@ -6,7 +6,7 @@
     Runs, in order:
       1.  Win11Debloat (latest)   - default mode, silent
       2.  Winutil (latest)        - your saved config (winutil-config.json)
-      2b. Windows Update 'Recommended' profile (clean-room implementation)
+      2b. Windows Update 'Recommended' profile (WinUtil, live)
       2c. Cloudflare DNS + DoH on every active adapter
       2d. Ultimate Performance power plan
       3.  O&O ShutUp10++          - your settings (ooshutup10.cfg), silent
@@ -107,81 +107,6 @@ function Invoke-Step {
         Write-Host "ERROR: $($_.Exception.Message)" -ForegroundColor Red
     }
 }
-
-function Set-RecommendedUpdateProfile {
-    # Windows Update 'Recommended' profile - original implementation.
-    # The policy keys and values are Microsoft's public Windows Update policy
-    # constants; no third-party source code is reproduced in this repo.
-    $polRoot   = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate'
-    $polAuto   = "$polRoot\AU"
-    $drvSearch = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching'
-    $devMeta   = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Device Metadata'
-
-    # 1. Update services: BITS and the Windows Update service on demand,
-    #    the Update Orchestrator active in the background.
-    $svcModes = @{ 'BITS' = 'Manual'; 'wuauserv' = 'Manual'; 'UsoSvc' = 'Automatic' }
-    foreach ($name in $svcModes.Keys) {
-        Set-Service -Name $name -StartupType $svcModes[$name]
-    }
-    Start-Service -Name UsoSvc
-
-    # 2. Re-arm the update pipeline scheduled tasks.
-    foreach ($taskPath in @('\Microsoft\Windows\InstallService\',
-                            '\Microsoft\Windows\UpdateOrchestrator\',
-                            '\Microsoft\Windows\UpdateAssistant\',
-                            '\Microsoft\Windows\WaaSMedic\',
-                            '\Microsoft\Windows\WindowsUpdate\',
-                            '\Microsoft\WindowsUpdate\')) {
-        Get-ScheduledTask -TaskPath $taskPath -ErrorAction SilentlyContinue |
-            Enable-ScheduledTask -ErrorAction SilentlyContinue
-    }
-
-    # 3. Do not offer or auto-search drivers through Windows Update.
-    New-Item -Path $drvSearch -Force | Out-Null
-    $driverPolicies = @{
-        'DontPromptForWindowsUpdate'        = 1
-        'DontSearchWindowsUpdate'          = 1
-        'DriverUpdateWizardWuSearchEnabled' = 0
-    }
-    foreach ($key in $driverPolicies.Keys) {
-        Set-ItemProperty -Path $drvSearch -Name $key -Type DWord -Value $driverPolicies[$key]
-    }
-    New-Item -Path $devMeta -Force | Out-Null
-    Set-ItemProperty -Path $devMeta -Name 'PreventDeviceMetadataFromNetwork' -Type DWord -Value 1
-
-    # 4. Deferral schedule: features 365 days, quality updates 4 days,
-    #    drivers excluded from quality updates.
-    New-Item -Path $polRoot -Force | Out-Null
-    $deferrals = @{
-        'ExcludeWUDriversInQualityUpdate' = 1
-        'DeferFeatureUpdates'             = 1
-        'DeferFeatureUpdatesPeriodInDays' = 365
-        'DeferQualityUpdates'             = 1
-        'DeferQualityUpdatesPeriodInDays' = 4
-    }
-    foreach ($key in $deferrals.Keys) {
-        Set-ItemProperty -Path $polRoot -Name $key -Type DWord -Value $deferrals[$key]
-    }
-
-    # 5. Never auto-restart while a user is signed in.
-    New-Item -Path $polAuto -Force | Out-Null
-    $restartPolicies = @{
-        'AUOptions'                     = 4
-        'NoAutoRebootWithLoggedOnUsers' = 1
-        'AUPowerManagement'             = 0
-    }
-    foreach ($key in $restartPolicies.Keys) {
-        Set-ItemProperty -Path $polAuto -Name $key -Type DWord -Value $restartPolicies[$key]
-    }
-
-    # 6. Clear stale migration leftovers from the consumer-side update store.
-    foreach ($key in @('BranchReadinessLevel', 'DeferFeatureUpdatesPeriodInDays', 'DeferQualityUpdatesPeriodInDays')) {
-        Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings' -Name $key -ErrorAction SilentlyContinue
-    }
-    Remove-ItemProperty -Path $polAuto -Name 'NoAutoUpdate' -ErrorAction SilentlyContinue
-    Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config' -Name 'DODownloadMode' -ErrorAction SilentlyContinue
-}
-
 function Set-CloudflareDns {
     $ipv4  = @('1.1.1.1', '1.0.0.1')
     $ipv6  = @('2606:4700:4700::1111', '2606:4700:4700::1001')
@@ -263,10 +188,18 @@ if (-not $SkipWinutil) {
 }
 
 if (-not $SkipUpdateProfile) {
-    Invoke-Step -Name "Windows Update 'Recommended' profile" -Desc 'Defer feature 365d / quality 4d, no driver offers, no auto-reboot (clean-room)' {
-        $edition = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').EditionID
-        if ($edition -like '*Home*') { Write-Warning 'Windows Home detected - update deferrals need Pro/Enterprise/Education; Windows will ignore some values.' }
-        Set-RecommendedUpdateProfile
+    Invoke-Step -Name "Windows Update 'Recommended' profile" -Desc 'WinUtil Invoke-WPFUpdatessecurity (live)' {
+        $wu = Join-Path $Root 'winutil.ps1'
+        if (-not (Test-Path $wu)) {
+            Write-Host 'Downloading Winutil (latest stable)...'
+            Invoke-RestMethod -Uri 'https://christitus.com/win' | Set-Content -Path $wu -Encoding UTF8
+        }
+        function Write-WinUtilLog {
+            param([string]$Component, [string]$Message, [string]$Level = 'INFO')
+            Write-Host "[$Level] $Message"
+        }
+        . "$wu"
+        Invoke-WPFUpdatessecurity
     }
 }
 
