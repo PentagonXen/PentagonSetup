@@ -1,6 +1,0 @@
-feat: update profile now calls WinUtil directly (like Talon)
-
-Replace the clean-room Set-RecommendedUpdateProfile with a dot-source of the
-live winutil.ps1 plus a call to Invoke-WPFUpdatessecurity, mirroring how
-Talon consumes WinUtil. Removes ~70 lines of maintained code - future
-WinUtil profile changes are inherited automatically.
